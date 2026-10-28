@@ -1,97 +1,52 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Contextual Stock Tracker: Android app
 
-# Getting Started
+The on-device copilot as a React Native app. It runs the shared engine in [`../src/core`](../src/core) with [llama.rn](https://github.com/mybigday/llama.rn): search, generation and your profile all stay on the phone.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## Screens
+- **Setup.** On first launch it downloads the two model files once (528 MB: Qwen2.5-0.5B-Instruct and bge-small), with progress. After that the app works offline.
+- **Ask.** Type a question or tap a suggestion. The answer streams in, followed by the filing passages it used (tap to expand) and timings. Tap 👍 to save a one-sentence takeaway to your profile.
+- **Profile.** Edit your watchlist, target prices, sentiment and notes, and review or remove saved takeaways. It shows the profile's token budget.
 
-## Step 1: Start Metro
+## How it fits together
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+| File | Role |
+|---|---|
+| `src/engine.ts` | llama.rn implementation of the engine interface (chat + embeddings) |
+| `src/models.ts` | Model download and presence checks, in the app's private storage |
+| `src/loadIndex.ts` | Loads the bundled search index from APK assets |
+| `src/storage.ts` | Profile storage (JSON file) |
+| `src/ui/` | Setup, Ask and Profile screens |
+| `scripts/sync-index.js` | Copies `../data/index` (built by the desktop pipeline) into the APK assets |
+| `scripts/patch-llama-rn.js` | Runs after `npm install`; makes x86_64 emulators load llama.rn's optimized x86_64 library, built with AVX2 |
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+## Build and run (Android)
 
-```sh
-# Using npm
-npm start
+Requires the Android SDK/NDK and JDK 17. First build the search index in the project root (`npm run fetch && npm run index`), then:
 
-# OR using Yarn
-yarn start
+```bash
+npm install
+npm run sync-index                 # copy the index into the app's assets
+npm run build:emulator             # x86_64 emulator build, llama.rn compiled from source with AVX2
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+adb reverse tcp:8081 tcp:8081
+npx react-native start
 ```
 
-## Step 2: Build and run your app
+For a physical ARM phone, `npm run android` uses llama.rn's prebuilt ARM libraries.
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+**Skip the in-app download during development** by copying models from the desktop `models/` folder into the app's private storage (debug builds only):
 
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+```bash
+adb push ../models/hf_Qwen_qwen2.5-0.5b-instruct-q4_k_m.gguf /data/local/tmp/qwen2.5-0.5b-instruct-q4_k_m.gguf
+adb push ../models/hf_CompendiumLabs_bge-small-en-v1.5-q8_0.gguf /data/local/tmp/bge-small-en-v1.5-q8_0.gguf
+adb shell "run-as com.stocktracker sh -c 'mkdir -p files/models && cp /data/local/tmp/*.gguf files/models/'"
 ```
 
-### iOS
+**Windows:** the C++ build fails if paths exceed 260 characters. Build from a short path, either by moving the project (e.g. `C:\dev\cst`) or by mapping a drive with `subst T: "<path>\app"` and building from `T:\`.
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+## Status
+- **Working:** the app installs, loads the models and the index, and answers end to end on the Pixel 8 Pro emulator.
+- **Slow on the emulator so far.** llama.rn was loading its generic, no-SIMD library there, at ~4 tokens/s. `scripts/patch-llama-rn.js` fixes the library selection; its rebuild is still to be verified.
+- **Still to verify:** a second question in a row (search-cache fix) and timings on a real phone.
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
-```
-
-Then, and every time you update your native dependencies, run:
-
-```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+Details are in [`../IMPLEMENTATION_LOG.md`](../IMPLEMENTATION_LOG.md), Part 2 §10.
