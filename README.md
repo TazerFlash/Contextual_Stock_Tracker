@@ -47,9 +47,11 @@ A React Native app on llama.rn:
 - Ask screen with streamed answers, tappable sources and timings
 - Profile screen to edit the watchlist, targets, sentiment and notes, and to review saved takeaways
 
-See [app/README.md](app/README.md).
+It runs end to end on the Pixel 8 Pro emulator (results below). See [app/README.md](app/README.md).
 
-## Results (desktop CPU, Intel i5-1035G1, 4 threads)
+## Results
+
+### Desktop (CPU only, Intel i5-1035G1, 4 threads)
 
 | Metric | Result | Target |
 |---|---|---|
@@ -59,6 +61,20 @@ See [app/README.md](app/README.md).
 | App-owned memory (excludes memory-mapped model files, ~530 MB) | ~256 MB | ≤ 600 MB ✅ |
 | Right passage among the 3 sent to the model | 18/18 | — |
 | Correct fact in the answer | ~10–11/18 | — |
+
+### Android app (Pixel 8 Pro emulator, same laptop, 4 vCPUs)
+
+| Metric | Generic llama.rn library | AVX2 library (patched) |
+|---|---|---|
+| Prompt processing | 3.8 tokens/s | 18 tokens/s |
+| Answer generation | 3.4 tokens/s | 9.8 tokens/s |
+| Time to first word | — | 16.7–21.4 s |
+| Full answer | ~162 s | ~38–41 s |
+| Second question in a row | crashed | ✅ works |
+
+On the emulator, llama.rn was picking its generic no-SIMD library; `app/scripts/patch-llama-rn.js` makes it load the AVX2 x86_64 build. Answers were correct and grounded, e.g. *NVIDIA Data Center revenue +117% year over year, +18% quarter over quarter* and *Azure +40%, measured against your $480 MSFT target*. Prompt processing on the emulator is still ~10× slower than on the desktop, so the latency targets still need measuring on a real ARM phone.
+
+### Takeaways
 
 Retrieval is reliable. The remaining accuracy limit is the 0.5B model: it tends to answer from the first passage even when the answer is in the second or third. The next step is a small re-ranking model so the best passage comes first. Full methodology, every experiment and its numbers are in [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md).
 
