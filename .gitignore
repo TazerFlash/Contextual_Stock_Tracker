@@ -1,0 +1,6 @@
+node_modules/
+models/
+data/corpus/
+data/index/
+data/state/
+data/eval/

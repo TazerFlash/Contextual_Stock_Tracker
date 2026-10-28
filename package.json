@@ -1,0 +1,25 @@
+{
+  "name": "contextual-stock-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "On-device contextual financial copilot: dual-memory (RAG + shared memory) engine",
+  "scripts": {
+    "models": "tsx scripts/download-models.ts",
+    "fetch": "tsx scripts/fetch-filings.ts",
+    "index": "tsx scripts/build-index.ts",
+    "ask": "tsx scripts/ask.ts",
+    "eval": "tsx scripts/eval.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "node-llama-cpp": "^3.22.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
