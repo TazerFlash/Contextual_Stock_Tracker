@@ -175,7 +175,7 @@ An **offline-first, on-device contextual financial copilot** built on a dual-mem
 
 * **Phase 1 (Done, rebuilt 2026-10-28):** Engine core: chunking, vector search, shared memory, prompt fusion, memory loop, SEC ingestion, desktop CLI, unit tests.
 * **Phase 2 (In progress):** End-to-end validation and tuning on desktop. Done: index, eval harness, first tuning round (retrieval hit@3 2/6 → 5/6, latency about halved). 0.5B vs 1.5B compared: staying on 0.5B. RAM cut: index 95 → 43 MB, process 888 → ~735–840 MB, ~256 MB private. RAM KPI redefined as app-owned memory (≤ 600 MB; ~256 MB on desktop ✅). Accuracy round: recency + scoped notes + question-first (right excerpt sent 18/18, note leaks 2 → 0; facts flat at ~10–11/18 because the model answers from excerpt [1]). Open: rank-1 precision, first-token KPI.
-* **Phase 3 (In progress, paused):** React Native app in `app/` with the llama.rn engine adapter, file storage and Ask/Profile screens, reusing `src/core/` unchanged. Runs end to end on the emulator; emulator speed fix built but not yet verified (Part 2, §10).
+* **Phase 3 (In progress):** React Native app in `app/` with the llama.rn engine adapter, file storage and Ask/Profile screens, reusing `src/core/` unchanged. Runs end to end on the emulator, with repeated questions and the AVX2 library (~40 s per answer there); real-phone latency still to measure (Part 2, §10).
 * **Phase 4 (Demo & Pitch):** Live offline vs. cloud latency comparison; verify zero network calls during query generation.
 
 ---
@@ -444,7 +444,7 @@ In every remaining failure the right passage was in the prompt, at position [2] 
 
 So the limit is now **which chunk ranks first**, not whether the right one is retrieved (18/18). The 0.5B model largely ignores excerpts [2] and [3]; telling it to "read all the excerpts" didn't change that.
 
-## 10. Android app (in progress, paused 2026-10-28)
+## 10. Android app (working on the emulator; real-phone test next)
 
 ### What exists
 - **`app/`** is a React Native CLI project (RN 0.87.1, llama.rn 0.12.9) that reuses `src/core/` unchanged through Metro `watchFolders`.
@@ -460,24 +460,31 @@ So the limit is now **which chunk ranks first**, not whether the right one is re
 - **Windows 260-character path limit** broke the C++ build. Workaround: build from a `subst` drive mapped to `app/` (`subst T: "...\COntextual Stock Tracker\app"`; it's gone after a reboot). The permanent fix is to move the project out of OneDrive to a short path such as `C:\dev\cst`.
 - **Metro couldn't resolve `@babel/runtime` for `src/core`.** Fixed with `resolver.nodeModulesPaths` in `app/metro.config.js`.
 - **Models `adb push`ed to `Android/data/...` were invisible to the app.** Android hides shell-owned files there. Models now live in private storage; for development, copy them in with `run-as` (below).
-- **Second question failed with "Exception in HostFunction".** llama.rn reused the cached query prefix in the bge encoder. Fixed by `clearCache()` before each embedding. *Not yet verified with a second question.*
-- **A JS reload loaded the models twice.** Fixed by `releaseAllLlama()` before loading. *Not yet verified.*
+- **Second question failed with "Exception in HostFunction".** llama.rn reused the cached query prefix in the bge encoder. Fixed by `clearCache()` before each embedding. Verified: a second question in a row now answers correctly.
+- **A JS reload loaded the models twice.** Fixed by `releaseAllLlama()` before loading.
 
 ### Emulator speed (the open issue)
 - **First full answer:** prompt at 3.8 tokens/s, generation at 3.4 tokens/s, ~2.7 min total. The desktop does ~170 prompt tokens/s on the same CPU.
 - **Cause:** the x86_64 emulator lists both `x86_64` and `arm64-v8a`. llama.rn checks for ARM first (any listed ABI), finds no ARM libraries, and falls back to its **generic no-SIMD library**.
 - **`app/scripts/patch-llama-rn.js`** (runs on `postinstall`) fixes this. It checks the *primary* ABI only, so ARM phones are unchanged, and switches the x86_64 build to AVX2 (`x86-64-v3`) for source builds.
-- **Not yet verified:** the rebuild with the ABI fix was stopped before it finished.
+- **Verified (2026-10-28):** logcat shows `librnllama_jni_x86_64.so` loading (it links the AVX2 `librnllama_x86_64`).
 
-### Resume here
+| NVIDIA / Azure question on the emulator | Before (generic library) | After (AVX2 library) |
+|---|---|---|
+| Prompt processing | 3.8 tokens/s | 18 tokens/s |
+| Generation | 3.4 tokens/s | 9.8 tokens/s |
+| Time to first word | — | 16.7 s / 21.4 s |
+| Total answer | ~162 s | 37.9 s / 41.3 s |
+
+Both answers were correct and grounded: NVIDIA Data Center +117% YoY / +18% QoQ; Azure +40%, tied to the $480 MSFT target. Prompt processing is still the bottleneck: ~18 tokens/s versus ~170 on the desktop with the same CPU. Likely causes are the emulator's 4 vCPUs competing with the host (only ~5 GB free RAM) and virtualisation overhead. The emulator isn't the target device, so the real latency numbers have to come from a physical ARM phone.
+
+### Rebuild and run on the emulator
 ```bash
 cd app && npm run build:emulator          # from T:\ if the project is still under OneDrive; C++ is cached, so it's quick
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk   # -r keeps the models in private storage
 adb reverse tcp:8081 tcp:8081 && npx react-native start
 ```
-1. In `adb logcat`, confirm `rnllama_jni_x86_64` loads, not `rnllama_jni`.
-2. Time the NVIDIA question again (before: 3.8 tokens/s prompt, 162 s total).
-3. Ask a second question to verify the `clearCache()` fix.
+In `adb logcat`, `rnllama_jni_x86_64` should load (not `rnllama_jni`), and `common_perf_print` lines give prompt and generation speed per answer.
 
 If the models are missing (e.g. after the emulator restores an old snapshot):
 ```bash
@@ -491,7 +498,7 @@ adb shell "run-as com.stocktracker sh -c 'mkdir -p files/models && cp /data/loca
 - **Better rank-1 precision with a small re-ranking model.** node-llama-cpp and llama.rn both support GGUF re-rankers (cross-encoders that score question + passage together). A tiny one such as jina-reranker-v1-tiny-en (~33M params) would fit the RAM budget. Measure evidence-at-[1] and facts with `--repeat 3`.
 - **Confirm the RAM KPI on a real phone**: private dirty ≤ 600 MB, with mapped weights reported alongside.
 - **Grow the eval set** beyond 6 questions; 6 is too few to see small effects.
-- The React Native app: `llama.rn` engine adapter + `AsyncStorage`, reusing `src/core/` as-is; measure the latency KPIs on a real phone.
+- **Measure the latency KPIs on a real ARM phone** (`npm run android`, prebuilt ARM libraries); the emulator's prompt processing is not representative.
 
 ## How to run
 

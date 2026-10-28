@@ -3,7 +3,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const from = path.resolve(__dirname, '../../data/index');
+// realpath so this also works from a `subst` drive mapped to app/ (Windows path-length workaround).
+const from = path.resolve(fs.realpathSync.native(__dirname), '../../data/index');
 const to = path.resolve(__dirname, '../android/app/src/main/assets/index');
 
 fs.mkdirSync(to, { recursive: true });

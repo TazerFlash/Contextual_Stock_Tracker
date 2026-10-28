@@ -45,8 +45,8 @@ adb shell "run-as com.stocktracker sh -c 'mkdir -p files/models && cp /data/loca
 **Windows:** the C++ build fails if paths exceed 260 characters. Build from a short path, either by moving the project (e.g. `C:\dev\cst`) or by mapping a drive with `subst T: "<path>\app"` and building from `T:\`.
 
 ## Status
-- **Working:** the app installs, loads the models and the index, and answers end to end on the Pixel 8 Pro emulator.
-- **Slow on the emulator so far.** llama.rn was loading its generic, no-SIMD library there, at ~4 tokens/s. `scripts/patch-llama-rn.js` fixes the library selection; its rebuild is still to be verified.
-- **Still to verify:** a second question in a row (search-cache fix) and timings on a real phone.
+- **Working on the Pixel 8 Pro emulator:** the app installs, loads the models and index, and answers repeated questions correctly, citing sources.
+- **Emulator speed:** with `scripts/patch-llama-rn.js`, llama.rn uses its AVX2 x86_64 library. Generation went from 3.4 to 9.8 tokens/s and a full answer from ~162 s to ~40 s. Prompt processing (~18 tokens/s) still dominates time to first word (~17–21 s).
+- **Next:** measure on a real ARM phone, where the latency targets apply.
 
 Details are in [`../IMPLEMENTATION_LOG.md`](../IMPLEMENTATION_LOG.md), Part 2 §10.
